@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import sys,os,wx,json,shutil
+import wx.lib.agw.multidirdialog as MDD
 
 class PhotoTagger(wx.Frame):
 	def __init__(self):
@@ -14,6 +15,7 @@ class PhotoTagger(wx.Frame):
 		self.photofns = {}
 		self.tagsfn = ""
 		self.filtertags = ""
+		self.filterpath = ""
 		self.changedTags = False
 
 	def createWidgets(self):
@@ -26,12 +28,16 @@ class PhotoTagger(wx.Frame):
 		menu1 = wx.Menu()
 		menuItem1_1 = menu1.Append(wx.ID_ANY, "Add directory")
 		menuItem1_2 = menu1.Append(wx.ID_ANY, "Add files")
-		menuItem1_3 = menu1.Append(wx.ID_ANY, "Copy to...")
-		menuItem1_4 = menu1.Append(wx.ID_ANY, "Symlink in...")
-		menu1.Bind(wx.EVT_MENU, self.onAddDir, menuItem1_1)
-		menu1.Bind(wx.EVT_MENU, self.onAddFiles, menuItem1_2)
-		menu1.Bind(wx.EVT_MENU, self.onCopyTo, menuItem1_3)
-		menu1.Bind(wx.EVT_MENU, self.onSymlinkTo, menuItem1_4)
+		menuItem1_3 = menu1.Append(wx.ID_ANY, "Copy to")
+		menuItem1_4 = menu1.Append(wx.ID_ANY, "Symlink in")
+		menuItem1_5 = menu1.Append(wx.ID_ANY, "Find in")
+		menuItem1_6 = menu1.Append(wx.ID_ANY, "Remove")
+		menu1.Bind(wx.EVT_MENU, self.onPhotosAddDir, menuItem1_1)
+		menu1.Bind(wx.EVT_MENU, self.onPhotosAddFiles, menuItem1_2)
+		menu1.Bind(wx.EVT_MENU, self.onPhotosCopyTo, menuItem1_3)
+		menu1.Bind(wx.EVT_MENU, self.onPhotosSymlinkTo, menuItem1_4)
+		menu1.Bind(wx.EVT_MENU, self.onPhotosFindIn, menuItem1_5)
+		menu1.Bind(wx.EVT_MENU, self.onPhotosRemove, menuItem1_6)
 
 		menu2 = wx.Menu()
 		menuItem2_1 = menu2.Append(wx.ID_ANY, "Open")
@@ -46,10 +52,14 @@ class PhotoTagger(wx.Frame):
 		menu3 = wx.Menu()
 		menuItem3_1 = menu3.Append(wx.ID_ANY, "All")
 		menuItem3_2 = menu3.Append(wx.ID_ANY, "Untagged")
-		menuItem3_3 = menu3.Append(wx.ID_ANY, "Tags...")
+		menuItem3_3 = menu3.Append(wx.ID_ANY, "Tags")
+		menuItem3_4 = menu3.Append(wx.ID_ANY, "Missing")
+		menuItem3_5 = menu3.Append(wx.ID_ANY, "Path")
 		menu3.Bind(wx.EVT_MENU, self.onFilterAll, menuItem3_1)
 		menu3.Bind(wx.EVT_MENU, self.onFilterUntagged, menuItem3_2)
 		menu3.Bind(wx.EVT_MENU, self.onFilterTags, menuItem3_3)
+		menu3.Bind(wx.EVT_MENU, self.onFilterMissing, menuItem3_4)
+		menu3.Bind(wx.EVT_MENU, self.onFilterPath, menuItem3_5)
 
 		menuBar = wx.MenuBar()
 		menuBar.Append(menu1, "Photos")
@@ -78,7 +88,7 @@ class PhotoTagger(wx.Frame):
 		self.tagsList.Bind(wx.EVT_LIST_KEY_DOWN, self.onTagsListKey)
 		self.onTagSelected_disable = False
 
-		self.photoList = wx.ListView(self.panel, wx.ID_ANY, style=wx.LC_LIST|wx.LC_SINGLE_SEL)
+		self.photoList = wx.ListView(self.panel, wx.ID_ANY, style=wx.LC_LIST)
 		#self.photoList.AppendColumn("Photo")
 		if self.darkTheme:
 			self.photoList.SetBackgroundColour(self.bgCol)
@@ -122,11 +132,6 @@ class PhotoTagger(wx.Frame):
 		for fn in sorted(self.phototags):
 			self.photoList.Append([os.path.basename(fn)])
 
-	def DisplayMsg(self, cap, msg):
-		mbox = wx.MessageDialog(None, msg, cap, style=wx.OK)
-		mbox.ShowModal()
-		mbox.Destroy()
-
 	def DisplayPhotoListCount(self):
 		self.statusBar.SetStatusText(str(self.photoList.GetItemCount()) + ' photos')
 
@@ -157,7 +162,7 @@ class PhotoTagger(wx.Frame):
 			#print(op, ftags)
 			atags = set(self.alltags)
 			if not ftags <= atags:
-				self.DisplayMsg('Warning','Invalid tags in your query')
+				wx.MessageBox('Invalid tags in your query', 'Warning')
 			self.photoList.DeleteAllItems()
 			for fn in sorted(self.phototags):
 				ptags = set(self.phototags[fn])
@@ -175,11 +180,34 @@ class PhotoTagger(wx.Frame):
 					continue
 			self.DisplayPhotoListCount()
 
+	def onFilterMissing(self, event):
+		self.photoList.DeleteAllItems()
+		for fn in sorted(self.phototags):
+			if not os.path.isfile(fn):
+				self.photoList.Append([os.path.basename(fn)])
+		self.DisplayPhotoListCount()
+
+	def onFilterPath(self, event):
+		s = ""
+		dialog = wx.TextEntryDialog(None, "Photo path substring", value=self.filterpath)
+		if dialog.ShowModal() == wx.ID_OK:
+			s = dialog.GetValue()
+		dialog.Destroy()
+		if len(s):
+			self.filterpath = s
+			self.photoList.DeleteAllItems()
+			for fn in sorted(self.phototags):
+				if os.path.dirname(fn).find(s) > -1:
+					self.photoList.Append([os.path.basename(fn)])
+			self.DisplayPhotoListCount()
 
 	def CopyPhotosTo(self, symlink=False):
-		dialog = wx.DirDialog(None, "Open", style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
+		dir = ""
+		dialog = wx.DirDialog(None, "Symlink" if symlink else "Copy", style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
 		if dialog.ShowModal() == wx.ID_OK:
 			dir = dialog.GetPath()
+		dialog.Destroy()
+		if dir:
 			for i in range(self.photoList.GetItemCount()):
 				p = self.photoList.GetItemText(i)
 				fn = self.photofns[p]
@@ -190,13 +218,56 @@ class PhotoTagger(wx.Frame):
 				else:
 					shutil.copyfile(fn, dst)
 				print("{} --> {} ({}/{})".format(fn, dst, i+1, self.photoList.GetItemCount()))
-		dialog.Destroy()
 
-	def onCopyTo(self, event):
+	def onPhotosCopyTo(self, event):
 		self.CopyPhotosTo()
 
-	def onSymlinkTo(self, event):
+	def onPhotosSymlinkTo(self, event):
 		self.CopyPhotosTo(symlink=True)
+
+	def onPhotosFindIn(self, event):
+		dirs = []
+		dialog = MDD.MultiDirDialog(None, "Find", agwStyle=MDD.DD_DIR_MUST_EXIST | MDD.DD_MULTIPLE)
+		if dialog.ShowModal() == wx.ID_OK:
+			dirs = dialog.GetPaths()
+		dialog.Destroy()
+		if len(dirs):
+			# create a list of missing photos
+			mis = []
+			for fn in self.phototags:
+				if os.path.isfile(fn): continue
+				mis.append(fn)
+			# create a dict of moves
+			mov = {}
+			for dir in dirs:
+				if sys.platform.startswith("linux") and dir.startswith("//"): dir = dir[1:] # MDD bug in linux?
+				for i in reversed(range(len(mis))):
+					fn = mis[i]
+					nfn = os.path.join(dir, os.path.basename(fn))
+					if os.path.isfile(nfn):
+						mov[fn] = nfn
+						del mis[i] # speedup
+
+			if wx.MessageBox("{} files found. Update database?".format(len(mov)), "Find", wx.ICON_QUESTION | wx.YES_NO) == wx.YES:
+				for fn in mov:
+					nfn = mov[fn]
+					self.phototags[nfn] = self.phototags[fn]
+					del self.phototags[fn]
+				self.RebuildPhotoFns()
+
+	def onPhotosRemove(self, event):
+		rem = []
+		i = self.photoList.GetFirstSelected()
+		while i > -1:
+			rem.append(i)
+			i = self.photoList.GetNextSelected(i)
+		if wx.MessageBox("Remove {} photos from database?".format(len(rem)), "Remove", wx.ICON_QUESTION | wx.YES_NO) == wx.YES:
+			for i in sorted(rem, reverse=True):
+				p = self.photoList.GetItemText(i)
+				fn = self.photofns[p]
+				del self.phototags[fn]
+				del self.photofns[p]
+				self.photoList.DeleteItem(i)
 
 	def SaveTags(self, fn):
 		f = open(fn, 'w')
@@ -226,6 +297,7 @@ class PhotoTagger(wx.Frame):
 		dialog = wx.FileDialog(None, "Save", wildcard="*.json", style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
 		if dialog.ShowModal() == wx.ID_OK:
 			self.tagsfn = dialog.GetPath()
+			if not self.tagsfn.endswith(".json"): self.tagsfn += ".json"
 			self.SaveTags(self.tagsfn)
 		dialog.Destroy()
 
@@ -251,11 +323,17 @@ class PhotoTagger(wx.Frame):
 
 	def onTagsListKey(self, event):
 		kc = event.GetKeyCode()
-		if kc == 87 or kc == 65 or kc == 83 or kc == 68: # WSAD
+		if (kc == 87) or (kc == 65) or (kc == 83) or (kc == 68): # WSAD
 			d = 1
-			if kc == 87 or kc == 65: d = -1
+			if (kc == 87) or (kc == 65): d = -1
 			c = self.photoList.GetItemCount()
 			if c == 0: return
+			# clear selection first
+			i = self.photoList.GetFirstSelected()
+			while i > -1:
+				self.photoList.Select(i, False)
+				i = self.photoList.GetNextSelected(i)
+			# advance focused item
 			i = self.photoList.GetFocusedItem() + d
 			if i >= c: i = 0
 			if i < 0: i = c - 1
@@ -294,7 +372,7 @@ class PhotoTagger(wx.Frame):
 			self.phototags[fn].remove(t)
 			self.changedTags = True
 
-	def onAddFiles(self, event):
+	def onPhotosAddFiles(self, event):
 		dialog = wx.FileDialog(None, "Open", wildcard="*.jpg", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE)
 		if dialog.ShowModal() == wx.ID_OK:
 			for fn in sorted(dialog.GetPaths()):
@@ -305,20 +383,24 @@ class PhotoTagger(wx.Frame):
 			self.DisplayPhotoListCount()
 		dialog.Destroy()
 
-	def onAddDir(self, event):
-		dialog = wx.DirDialog(None, "Open", style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
+	def onPhotosAddDir(self, event):
+		dirs = []
+		dialog = MDD.MultiDirDialog(None, "Open", agwStyle=MDD.DD_DIR_MUST_EXIST | MDD.DD_MULTIPLE)
 		if dialog.ShowModal() == wx.ID_OK:
-			dir = dialog.GetPath()
+			dirs = dialog.GetPaths()
+		dialog.Destroy()
+		for dir in dirs:
+			if sys.platform.startswith("linux") and dir.startswith("//"): dir = dir[1:] # MDD bug in linux?
 			for bfn in sorted(os.listdir(dir)):
 				sfn = os.path.splitext(bfn)
 				if sfn[1] != '.jpg': continue
 				fn = os.path.join(dir, bfn)
 				if fn not in self.phototags:
 					self.phototags[fn] = []
+		if len(dirs):
 			self.RebuildPhotoFns()
 			self.DisplayAllPhotos()
 			self.DisplayPhotoListCount()
-		dialog.Destroy()
 
 	def onPhotoFocused(self, event):
 		p = event.GetText()
@@ -339,7 +421,7 @@ class PhotoTagger(wx.Frame):
 			self.photoView.SetBitmap(wx.Bitmap(img.Scale(w*f, h*f)))
 			self.displayedPhotoPath = fn
 		else:
-			self.photoView.SetBitmap(wx.Bitmap())
+			self.photoView.SetBitmap(wx.Bitmap(1, 1))
 			self.displayedPhotoPath = ""
 		self.DisplayPhotoTags(fn)
 

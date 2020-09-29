@@ -9,14 +9,14 @@ themselves are not touched - the tag database is kept in a json file.
 
 - Run the application.
 - Add some photos via either "Photos/Add directory" or "Photos/Add files" menu.
-- Define your tags via "Tags/Add" menu. Do not use commas in tag names (used in filtering).
+- Define your tags via "Tags/Add" menu. Several tags can be added at once by separating them with commas.
 - Select a photo from the left listview.
-- The selected photo's preview will appear in the middle. Doubleclick the photo to view it in an external viewer.
+- The selected photo's preview will appear in the middle.
 - Select the appropriate tags for this photo in the right listview.
 - Windows users have to hold Ctrl to select multiple tags, linux users do not.
 - When done, save your database with "Tags/Save" menu.
 - Close the application.
-- Next time you can use "Tags/Open" menu to resume your work or use your tags for filtering.
+- Next time use "Tags/Open" to resume tagging or use the app for filtering.
 
 ### Filtering
 
@@ -31,13 +31,27 @@ Examples:
 - "=Nature,People" will display photos containing exactly Nature and People and no other tags
 - "!Nature" will display photos that do not contain Nature
 
-You can copy the files currently listed to another directory via the "Photos/Copy to..." menu.
+You can copy the photos currently listed to another directory via the "Photos/Copy to..." menu.
 The idea here is to be able to quickly give some photos to a friend by first filtering by what
 they're interested in and then copying the files somewhere (usually a USB drive).
 
 You can also just create symlinks to the photos listed in some directory via the "Photos/Symlink to..." menu.
-This is for when you want to use another program, f.ex. a proper photo viewer, on a number of filtered photos
-and copying the files would be time consuming.
+This is for when you want to use another program, f.ex. an external viewer, on a number of filtered photos
+and copying the files would be wasteful (time, SSD erase cycles, etc.).
 
 Pressing "Filter/All" will display all photos you have stored in your database.
-Pressing "Filter/Untagged" will display all photos you have added but haven't defined any tags for.
+
+Pressing "Filter/Untagged" will display photos you have added but haven't defined any tags for yet.
+
+Pressing "Filter/Missing" will display photos whose files can't be found (were moved elsewhere/deleted).
+Photo files that have been moved can be found again using the Photos/Find menu.
+
+Pressing "Filter/Path" will display photos whose filepath contains a string you specify.
+
+### Other
+
+Selected photos can be removed from the database using the Photos/Remove menu. No files are deleted.
+
+Pressing S selects the next photo in the list. Pressing W selects the previous.
+
+Double clicking the photo preview opens it with an external viewer.
