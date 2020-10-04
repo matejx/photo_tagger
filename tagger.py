@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys,os,wx,json,shutil
+import sys,os,wx,json,shutil,argparse
 import wx.lib.agw.multidirdialog as MDD
 
 class PhotoTagger(wx.Frame):
@@ -21,9 +21,9 @@ class PhotoTagger(wx.Frame):
 	def createWidgets(self):
 		self.Bind(wx.EVT_CLOSE, self.onClose)
 
-		self.panel = wx.Panel(self)
+		self.panel1 = wx.Panel(self)
 		if self.darkTheme:
-			self.panel.SetBackgroundColour(self.bgCol)
+			self.panel1.SetBackgroundColour(self.bgCol)
 
 		menu1 = wx.Menu()
 		menuItem1_1 = menu1.Append(wx.ID_ANY, "Add directory")
@@ -70,13 +70,13 @@ class PhotoTagger(wx.Frame):
 		self.statusBar = self.CreateStatusBar(1)
 		self.statusBar.SetStatusText("Hello!")
 
-		self.photoView = wx.StaticBitmap(self.panel, wx.ID_ANY)
+		self.photoView = wx.StaticBitmap(self.panel1, wx.ID_ANY)
 		self.photoView.SetMinClientSize(wx.Size(800, 600))
 		self.photoView.Bind(wx.EVT_LEFT_DCLICK, self.onPhotoClick)
 		self.displayedPhotoPath = ""
 		#self.photoView.SetScaleMode(wx.StaticBitmap.ScaleMode.Scale_AspectFit) # requires wxpython 4.1
 
-		self.tagsList = wx.ListView(self.panel, wx.ID_ANY, style=wx.LC_LIST)
+		self.tagsList = wx.ListView(self.panel1, wx.ID_ANY, style=wx.LC_LIST)
 		if self.darkTheme:
 			self.tagsList.SetBackgroundColour(self.bgCol)
 			self.tagsList.SetTextColour(self.txtCol)
@@ -88,8 +88,8 @@ class PhotoTagger(wx.Frame):
 		self.tagsList.Bind(wx.EVT_LIST_KEY_DOWN, self.onTagsListKey)
 		self.onTagSelected_disable = False
 
-		self.photoList = wx.ListView(self.panel, wx.ID_ANY, style=wx.LC_LIST)
-		#self.photoList.AppendColumn("Photo")
+		self.photoList = wx.ListView(self.panel1, wx.ID_ANY, style=wx.LC_REPORT)
+		self.photoList.AppendColumn("Photo")
 		if self.darkTheme:
 			self.photoList.SetBackgroundColour(self.bgCol)
 			self.photoList.SetTextColour(self.txtCol)
@@ -100,9 +100,9 @@ class PhotoTagger(wx.Frame):
 		self.sizer1.Add(self.photoList, 1, wx.EXPAND | wx.ALL, 5)
 		self.sizer1.Add(self.photoView, 1, wx.ALL, 5)
 		self.sizer1.Add(self.tagsList, 1, wx.EXPAND | wx.ALL, 5)
-		self.panel.SetSizer(self.sizer1)
+		self.panel1.SetSizer(self.sizer1)
 		self.sizer1.Fit(self)
-		#self.panel.Layout()
+		#self.panel1.Layout()
 
 	def RebuildPhotoFns(self):
 		self.photofns = {}
@@ -148,7 +148,7 @@ class PhotoTagger(wx.Frame):
 
 	def onFilterTags(self, event):
 		s = ""
-		dialog = wx.TextEntryDialog(None, "Enter Tags", value=self.filtertags)
+		dialog = wx.TextEntryDialog(None, "Enter Tags", "", value=self.filtertags)
 		if dialog.ShowModal() == wx.ID_OK:
 			s = dialog.GetValue()
 		dialog.Destroy()
@@ -189,7 +189,7 @@ class PhotoTagger(wx.Frame):
 
 	def onFilterPath(self, event):
 		s = ""
-		dialog = wx.TextEntryDialog(None, "Photo path substring", value=self.filterpath)
+		dialog = wx.TextEntryDialog(None, "Photo full filename substring", "", value=self.filterpath)
 		if dialog.ShowModal() == wx.ID_OK:
 			s = dialog.GetValue()
 		dialog.Destroy()
@@ -197,7 +197,7 @@ class PhotoTagger(wx.Frame):
 			self.filterpath = s
 			self.photoList.DeleteAllItems()
 			for fn in sorted(self.phototags):
-				if os.path.dirname(fn).find(s) > -1:
+				if fn.find(s) > -1:
 					self.photoList.Append([os.path.basename(fn)])
 			self.DisplayPhotoListCount()
 
@@ -261,7 +261,7 @@ class PhotoTagger(wx.Frame):
 		while i > -1:
 			rem.append(i)
 			i = self.photoList.GetNextSelected(i)
-		if wx.MessageBox("Remove {} photos from database?".format(len(rem)), "Remove", wx.ICON_QUESTION | wx.YES_NO) == wx.YES:
+		if rem and wx.MessageBox("Remove {} photos from database?".format(len(rem)), "Remove", wx.ICON_QUESTION | wx.YES_NO) == wx.YES:
 			for i in sorted(rem, reverse=True):
 				p = self.photoList.GetItemText(i)
 				fn = self.photofns[p]
@@ -274,9 +274,10 @@ class PhotoTagger(wx.Frame):
 		json.dump({'alltags':self.alltags,'phototags':self.phototags}, f, indent=4)
 		f.close()
 		self.changedTags = False
+		self.tagsfn = fn
 
 	def OpenTags(self, fn):
-		f = open(self.tagsfn,'r')
+		f = open(fn,'r')
 		d = json.load(f)
 		f.close()
 		self.alltags = sorted(d['alltags'])
@@ -286,6 +287,7 @@ class PhotoTagger(wx.Frame):
 		self.DisplayAllTags()
 		self.DisplayPhotoListCount()
 		self.changedTags = False
+		self.tagsfn = fn
 
 	def onTagsSave(self, event):
 		if self.tagsfn:
@@ -296,16 +298,16 @@ class PhotoTagger(wx.Frame):
 	def onTagsSaveAs(self, event):
 		dialog = wx.FileDialog(None, "Save", wildcard="*.json", style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
 		if dialog.ShowModal() == wx.ID_OK:
-			self.tagsfn = dialog.GetPath()
-			if not self.tagsfn.endswith(".json"): self.tagsfn += ".json"
-			self.SaveTags(self.tagsfn)
+			fn = dialog.GetPath()
+			if not fn.endswith(".json"): fn += ".json"
+			self.SaveTags(fn)
 		dialog.Destroy()
 
 	def onTagsOpen(self, event):
 		dialog = wx.FileDialog(None, "Open", wildcard="*.json", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
 		if dialog.ShowModal() == wx.ID_OK:
-			self.tagsfn = dialog.GetPath()
-			self.OpenTags(self.tagsfn)
+			fn = dialog.GetPath()
+			self.OpenTags(fn)
 		dialog.Destroy()
 
 	def AddTag(self, t):
@@ -441,9 +443,16 @@ class PhotoTagger(wx.Frame):
 if __name__ == '__main__':
 	print(wx.version())
 	print(sys.platform)
+
+	ap = argparse.ArgumentParser()
+	ap.add_argument("--dark", action="store_true", help="enable dark theme")
+	ap.add_argument("--open", metavar="DB", help="open database file on startup")
+	args = ap.parse_args()
+
 	app = wx.App(False)
 	mainframe = PhotoTagger()
-	mainframe.darkTheme = "--dark" in sys.argv
+	mainframe.darkTheme = args.dark
 	mainframe.createWidgets()
+	if args.open: mainframe.OpenTags(args.open)
 	mainframe.Show()
 	app.MainLoop()
